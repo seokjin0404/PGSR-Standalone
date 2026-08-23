@@ -42,10 +42,14 @@ def loadCam(args, id, cam_info, resolution_scale):
     sys.stdout.write("load camera {}".format(id))
     sys.stdout.flush()
 
-    return Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
+    scale_x = resolution[0] / orig_w
+    scale_y = resolution[1] / orig_h
+    return Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T,
                   FoVx=cam_info.FovX, FoVy=cam_info.FovY,
                   image_width=resolution[0], image_height=resolution[1],
                   image_path=cam_info.image_path,
+                  Fx=cam_info.fx * scale_x, Fy=cam_info.fy * scale_y,
+                  Cx=cam_info.Cx * scale_x, Cy=cam_info.Cy * scale_y,
                   image_name=cam_info.image_name, uid=cam_info.global_id, 
                   preload_img=args.preload_img, 
                   ncc_scale=args.ncc_scale,
@@ -69,14 +73,21 @@ def camera_to_JSON(id, camera : Camera):
     pos = W2C[:3, 3]
     rot = W2C[:3, :3]
     serializable_array_2d = [x.tolist() for x in rot]
+    is_loaded_camera = hasattr(camera, "image_width")
+    width = camera.image_width if is_loaded_camera else camera.width
+    height = camera.image_height if is_loaded_camera else camera.height
+    fx = camera.Fx if is_loaded_camera else camera.fx
+    fy = camera.Fy if is_loaded_camera else camera.fy
     camera_entry = {
         'id' : id,
         'img_name' : camera.image_name,
-        'width' : camera.width,
-        'height' : camera.height,
+        'width' : width,
+        'height' : height,
         'position': pos.tolist(),
         'rotation': serializable_array_2d,
-        'fy' : fov2focal(camera.FovY, camera.height),
-        'fx' : fov2focal(camera.FovX, camera.width)
+        'fy' : fy,
+        'fx' : fx,
+        'cx' : camera.Cx,
+        'cy' : camera.Cy,
     }
     return camera_entry

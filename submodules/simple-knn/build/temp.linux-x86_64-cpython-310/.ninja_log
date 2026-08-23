@@ -1,4 +1,0 @@
-# ninja log v7
-0	6709	1787070955753505941	/home/damislab/jinhyuk/projects/PGSR/submodules/simple-knn/build/temp.linux-x86_64-cpython-310/ext.o	2d732b62b598d133
-6710	11730	1787070962463516270	/home/damislab/jinhyuk/projects/PGSR/submodules/simple-knn/build/temp.linux-x86_64-cpython-310/simple_knn.o	73bf6e4e7a38ccf9
-11730	27985	1787070967482612687	/home/damislab/jinhyuk/projects/PGSR/submodules/simple-knn/build/temp.linux-x86_64-cpython-310/spatial.o	684fc391e12981d0

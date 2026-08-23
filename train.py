@@ -73,6 +73,7 @@ def gen_virtul_cam(cam, trans_noise=1.0, deg_noise=15.0):
     Rt = np.linalg.inv(C2W)
     virtul_cam = Camera(100000, Rt[:3, :3].transpose(), Rt[:3, 3], cam.FoVx, cam.FoVy,
                         cam.image_width, cam.image_height,
+                        cam.Fx, cam.Fy, cam.Cx, cam.Cy,
                         cam.image_path, cam.image_name, 100000,
                         trans=np.array([0.0, 0.0, 0.0]), scale=1.0, 
                         preload_img=False, data_device = "cuda")

@@ -12,7 +12,7 @@
 import torch
 from torch import nn
 import numpy as np
-from utils.graphics_utils import getWorld2View2, getProjectionMatrix, fov2focal, getProjectionMatrixCenterShift
+from utils.graphics_utils import getWorld2View2, getProjectionMatrixCenterShift
 import copy
 from PIL import Image
 from utils.general_utils import PILtoTorch
@@ -51,6 +51,7 @@ def process_image(image_path, resolution, ncc_scale):
 class Camera(nn.Module):
     def __init__(self, colmap_id, R, T, FoVx, FoVy,
                  image_width, image_height,
+                 Fx, Fy, Cx, Cy,
                  image_path, image_name, uid,
                  trans=np.array([0.0, 0.0, 0.0]), scale=1.0, 
                  ncc_scale=1.0,
@@ -70,10 +71,10 @@ class Camera(nn.Module):
         self.image_width = image_width
         self.image_height = image_height
         self.resolution = (image_width, image_height)
-        self.Fx = fov2focal(FoVx, self.image_width)
-        self.Fy = fov2focal(FoVy, self.image_height)
-        self.Cx = 0.5 * self.image_width
-        self.Cy = 0.5 * self.image_height
+        self.Fx = float(Fx)
+        self.Fy = float(Fy)
+        self.Cx = float(Cx)
+        self.Cy = float(Cy)
         try:
             self.data_device = torch.device(data_device)
         except Exception as e:
@@ -98,7 +99,11 @@ class Camera(nn.Module):
         self.scale = scale
 
         self.world_view_transform = torch.tensor(getWorld2View2(R, T, trans, scale)).transpose(0, 1).cuda()
-        self.projection_matrix = getProjectionMatrix(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy).transpose(0,1).cuda()
+        self.projection_matrix = getProjectionMatrixCenterShift(
+            znear=self.znear, zfar=self.zfar,
+            cx=self.Cx, cy=self.Cy, fl_x=self.Fx, fl_y=self.Fy,
+            w=self.image_width, h=self.image_height,
+        ).transpose(0, 1).cuda()
         self.full_proj_transform = (self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))).squeeze(0)
         self.camera_center = self.world_view_transform.inverse()[3, :3]
         self.plane_mask, self.non_plane_mask = None, None
@@ -172,7 +177,11 @@ def sample_cam(cam_l: Camera, cam_r: Camera):
     cam.T = Rt[:3, 3]
 
     cam.world_view_transform = torch.tensor(getWorld2View2(cam.R, cam.T, cam.trans, cam.scale)).transpose(0, 1).cuda()
-    cam.projection_matrix = getProjectionMatrix(znear=cam.znear, zfar=cam.zfar, fovX=cam.FoVx, fovY=cam.FoVy).transpose(0,1).cuda()
+    cam.projection_matrix = getProjectionMatrixCenterShift(
+        znear=cam.znear, zfar=cam.zfar,
+        cx=cam.Cx, cy=cam.Cy, fl_x=cam.Fx, fl_y=cam.Fy,
+        w=cam.image_width, h=cam.image_height,
+    ).transpose(0, 1).cuda()
     cam.full_proj_transform = (cam.world_view_transform.unsqueeze(0).bmm(cam.projection_matrix.unsqueeze(0))).squeeze(0)
     cam.camera_center = cam.world_view_transform.inverse()[3, :3]
     return cam

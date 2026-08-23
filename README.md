@@ -5,6 +5,138 @@ Danpeng Chen, Hai Li, [Weicai Ye](https://ywcmaike.github.io/), Yifan Wang, Weij
 
 We present a Planar-based Gaussian Splatting Reconstruction representation for efficient and high-fidelity surface reconstruction from multi-view RGB images without any geometric prior (depth or normal from pre-trained model).  
 
+This standalone distribution is based on the original [zju3dv/PGSR](https://github.com/zju3dv/PGSR) project. The original copyright, license, and citation requirements are retained.
+
+## Standalone batch runner
+
+This workflow trains and evaluates PGSR on both synthetic and prepared
+real-world scenes using one GPU. It is self-contained: it does not require
+a checkout, Python environment, or code from `gsplat_structured_light`.
+
+### 1. Requirements
+
+- Linux with an NVIDIA GPU
+- An NVIDIA driver and CUDA toolkit (`nvcc` must be available)
+- Python 3 with `venv` support
+
+### 2. Install PGSR
+
+Run this once from the PGSR repository root:
+
+```shell
+bash setup_pgsr.sh
+```
+
+The script creates `PGSR/.venv`, installs the Python dependencies, and compiles
+the two PGSR CUDA extensions. The batch runner selects this environment
+automatically; activating it manually is not required.
+
+### 3. Dataset structure
+
+`--data-root` may point to one scene, a group such as `real-world`, or a common
+parent containing both dataset types. Scenes are detected recursively:
+
+- `transforms_train.json` identifies a synthetic scene.
+- `split.json` identifies a prepared real-world scene.
+
+Synthetic scene:
+
+```text
+chair2/
+├── transforms_train.json
+├── transforms_val.json
+├── train/rgb/ ...
+└── val/rgb/ ...
+```
+
+Prepared real-world scene:
+
+```text
+fruits/
+├── split.json
+├── train/rgb/ ...
+├── val/rgb/ ...
+├── colmap_workspace/
+│   ├── run_summary.json
+│   └── sparse/<best_model_id>/
+│       ├── cameras.bin
+│       ├── images.bin
+│       └── points3D.bin
+└── scale_estimation/
+    └── scale_result.json
+```
+
+For real-world data, `split.json` must provide `train_pose_ids` and
+`val_pose_ids`. The corresponding pattern-1 images must be registered in the
+selected COLMAP `PINHOLE` model.
+
+### 4. Run all scenes on one GPU
+
+Only change the dataset path and the GPU ID:
+
+```shell
+bash run_all_pgsr.sh \
+    --data-root /path/to/datasets \
+    --gpu 0
+```
+
+The detected scenes run sequentially on the selected GPU. The default workflow
+trains for 30,000 iterations, renders validation views, and computes PSNR,
+SSIM, and LPIPS. A common parent containing multiple synthetic and
+real-world scenes will run every detected scene.
+
+Check scene discovery and dataset-type detection without training:
+
+```shell
+bash run_all_pgsr.sh \
+    --data-root /path/to/datasets \
+    --gpu 0 \
+    --dry-run
+```
+
+### 5. Color policy
+
+The real-world PNG sample values are already **linear RGB**. PGSR preserves
+those values exactly and trains, renders, and evaluates in the linear domain.
+The adapter does not apply sRGB decoding, sRGB encoding, gamma, exposure, or
+white-background conversion. `--white-background` applies only to synthetic RGBA inputs.
+
+### 6. Results and reruns
+
+Each scene is written below `output/batch/`:
+
+```text
+output/batch/<scene>/
+├── results.json
+├── per_view.json
+├── logs/
+│   ├── training.log
+│   ├── render.log
+│   └── metrics.log
+├── point_cloud/
+└── test/
+```
+
+Render and evaluate existing checkpoints without training:
+
+```shell
+bash run_all_pgsr.sh \
+    --data-root /path/to/datasets \
+    --gpu 0 \
+    --eval-only
+```
+
+Use `--skip-existing` to continue with incomplete scenes, `--output-root PATH`
+to choose another result directory, or `--iterations N` for a short smoke test.
+
+Standard Blender/NeRF synthetic scenes preserve all frames and their original
+coordinate scale. Extended synthetic scenes with explicit `pattern_index`
+metadata select pattern 1 by default; millimetre-scale camera coordinates are converted
+to metres. The real-world adapter uses pattern 1 and native COLMAP coordinates
+without changing pixels.
+For synthetic scenes, `--pattern N` can select another pattern. For either
+dataset type, `--eval-split test` is available when that split exists.
+
 ## Updates
 - [2024.07.18]: We fine-tuned the hyperparameters based on the original paper. The Chamfer Distance on the DTU dataset decreased to 0.47.
 
@@ -31,9 +163,9 @@ The F1 Score↑ on the TnT dataset
 
 The repository contains submodules, thus please check it out with 
 ```shell
-# SSH
-git clone git@github.com:zju3dv/PGSR.git
-cd PGSR
+# Standalone repository
+git clone https://github.com/seokjin0404/PGSR-Standalone.git
+cd PGSR-Standalone
 
 conda create -n pgsr python=3.8
 conda activate pgsr

@@ -36,6 +36,8 @@ class CameraInfo(NamedTuple):
     height: int
     fx: float
     fy: float
+    Cx: float
+    Cy: float
 
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
@@ -100,11 +102,16 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
 
         if intr.model=="SIMPLE_PINHOLE":
             focal_length_x = intr.params[0]
+            focal_length_y = focal_length_x
+            principal_x = intr.params[1]
+            principal_y = intr.params[2]
             FovY = focal2fov(focal_length_x, height)
             FovX = focal2fov(focal_length_x, width)
         elif intr.model=="PINHOLE":
             focal_length_x = intr.params[0]
             focal_length_y = intr.params[1]
+            principal_x = intr.params[2]
+            principal_y = intr.params[3]
             FovY = focal2fov(focal_length_y, height)
             FovX = focal2fov(focal_length_x, width)
         else:
@@ -115,7 +122,8 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
 
         cam_info = CameraInfo(uid=uid, global_id=idx, R=R, T=T, FovY=FovY, FovX=FovX,
                               image_path=image_path, image_name=image_name, 
-                              width=width, height=height, fx=focal_length_x, fy=focal_length_y)
+                              width=width, height=height, fx=focal_length_x,
+                              fy=focal_length_y, Cx=principal_x, Cy=principal_y)
         cam_infos.append(cam_info)
     sys.stdout.write('\n')
     return cam_infos
@@ -187,7 +195,7 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
     ply_path = os.path.join(path, "sparse/points3D.ply")
     bin_path = os.path.join(path, "sparse/points3D.bin")
     txt_path = os.path.join(path, "sparse/points3D.txt")
-    if not os.path.exists(ply_path) or True:
+    if not os.path.exists(ply_path):
         print("Converting point3d.bin to .ply, will happen only the first time you open the scene.")
         try:
             xyz, rgb, _ = read_points3D_binary(bin_path)
@@ -238,14 +246,19 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
             norm_data = im_data / 255.0
             arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
-            image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
+            image = Image.fromarray(np.array(arr*255.0, dtype=np.uint8), "RGB")
 
             fovy = focal2fov(fov2focal(fovx, image.size[0]), image.size[1])
             FovY = fovy 
             FovX = fovx
 
-            cam_infos.append(CameraInfo(uid=idx, global_id=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                            image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1]))
+            fx = fov2focal(FovX, image.size[0])
+            fy = fov2focal(FovY, image.size[1])
+            cam_infos.append(CameraInfo(
+                uid=idx, global_id=idx, R=R, T=T, FovY=FovY, FovX=FovX,
+                image_path=image_path, image_name=image_name, width=image.size[0],
+                height=image.size[1], fx=fx, fy=fy,
+                Cx=0.5 * image.size[0], Cy=0.5 * image.size[1]))
             
     return cam_infos
 

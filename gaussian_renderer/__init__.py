@@ -92,6 +92,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             tanfovx=tanfovx,
             tanfovy=tanfovy,
             bg=bg_color,
+            cx=viewpoint_camera.Cx,
+            cy=viewpoint_camera.Cy,
             scale_modifier=scaling_modifier,
             viewmatrix=viewpoint_camera.world_view_transform,
             projmatrix=viewpoint_camera.full_proj_transform,
@@ -162,7 +164,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
                     "out_observe": out_observe,
                     "rendered_normal": rendered_normal,
                     "plane_depth": plane_depth,
-                    "rendered_distance": rendered_distance
+                    "rendered_distance": rendered_distance,
+                    "rendered_alpha": rendered_alpha,
                     }
     
     if app_model is not None and pc.use_app:

@@ -1,0 +1,24 @@
+# Local Python environment and caches
+.venv/
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+**/build/
+
+# Datasets, checkpoints, renders, and experiment artifacts
+data/
+output/
+outputs/
+results/
+protocol_assets/
+protocol_eval/
+
+# Local protocol scripts from the development workspace
+scripts/export_protocol_raw.py
+scripts/run_pgsr_scene.sh
+
+# Editor and OS metadata
+.DS_Store
+.idea/
+.vscode/
