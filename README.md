@@ -7,135 +7,101 @@ We present a Planar-based Gaussian Splatting Reconstruction representation for e
 
 This standalone distribution is based on the original [zju3dv/PGSR](https://github.com/zju3dv/PGSR) project. The original copyright, license, and citation requirements are retained.
 
-## Standalone batch runner
+## Reproducible synthetic and real-world benchmark
 
-This workflow trains and evaluates PGSR on both synthetic and prepared
-real-world scenes using one GPU. It is self-contained: it does not require
-a checkout, Python environment, or code from `gsplat_structured_light`.
+This repository contains the complete PGSR training, rendering, metric, and
+export pipeline used for the handoff. It does not import code or environments
+from any other local research repository.
 
-### 1. Requirements
+### Run
 
-- Linux with an NVIDIA GPU
-- An NVIDIA driver and CUDA toolkit (`nvcc` must be available)
-- Python 3 with `venv` support
-
-### 2. Install PGSR
-
-Run this once from the PGSR repository root:
+Install PGSR once:
 
 ```shell
 bash setup_pgsr.sh
 ```
 
-The script creates `PGSR/.venv`, installs the Python dependencies, and compiles
-the two PGSR CUDA extensions. The batch runner selects this environment
-automatically; activating it manually is not required.
-
-### 3. Dataset structure
-
-`--data-root` may point to one scene, a group such as `real-world`, or a common
-parent containing both dataset types. Scenes are detected recursively:
-
-- `transforms_train.json` identifies a synthetic scene.
-- `split.json` identifies a prepared real-world scene.
-
-Synthetic scene:
-
-```text
-chair2/
-├── transforms_train.json
-├── transforms_val.json
-├── train/rgb/ ...
-└── val/rgb/ ...
-```
-
-Prepared real-world scene:
-
-```text
-fruits/
-├── split.json
-├── train/rgb/ ...
-├── val/rgb/ ...
-├── colmap_workspace/
-│   ├── run_summary.json
-│   └── sparse/<best_model_id>/
-│       ├── cameras.bin
-│       ├── images.bin
-│       └── points3D.bin
-└── scale_estimation/
-    └── scale_result.json
-```
-
-For real-world data, `split.json` must provide `train_pose_ids` and
-`val_pose_ids`. The corresponding pattern-1 images must be registered in the
-selected COLMAP `PINHOLE` model.
-
-### 4. Run all scenes on one GPU
-
-Only change the dataset path and the GPU ID:
+For each script below, change only the clearly marked `DATA_ROOT` line at its
+top. Do not change scene lists, output paths, Python files, or hyperparameters.
 
 ```shell
-bash run_all_pgsr.sh \
-    --data-root /path/to/datasets \
-    --gpu 0
+bash scripts/run_pgsr_synthetic.sh
 ```
 
-The detected scenes run sequentially on the selected GPU. The default workflow
-trains for 30,000 iterations, renders validation views, and computes PSNR,
-SSIM, and LPIPS. A common parent containing multiple synthetic and
-real-world scenes will run every detected scene.
-
-Check scene discovery and dataset-type detection without training:
+This runs exactly `chair`, `drum`, `ficus`, `lego`, `mic`, and `ship`.
 
 ```shell
-bash run_all_pgsr.sh \
-    --data-root /path/to/datasets \
-    --gpu 0 \
-    --dry-run
+bash scripts/run_pgsr_real.sh
 ```
 
-### 5. Color policy
+This runs exactly `fruits`, `lego`, `stair`, and `statues`. Scenes run
+sequentially. Each scene completes training, checkpoint creation, rendering,
+evaluation, export, and verification before the next scene starts. Set
+`CUDA_VISIBLE_DEVICES` before the command to select a GPU without editing code.
 
-The real-world PNG sample values are already **linear RGB**. PGSR preserves
-those values exactly and trains, renders, and evaluates in the linear domain.
-The adapter does not apply sRGB decoding, sRGB encoding, gamma, exposure, or
-white-background conversion. `--white-background` applies only to synthetic RGBA inputs.
+Synthetic scenes need `transforms_train.json` plus validation transforms.
+Real scenes need `split.json`, `colmap_workspace/run_summary.json`, and
+`scale_estimation/scale_result.json`. Adapters select pattern-1 RGB without
+decoding or gamma conversion.
 
-### 6. Results and reruns
-
-Each scene is written below `output/batch/`:
+### Results
 
 ```text
-output/batch/<scene>/
-├── results.json
-├── per_view.json
-├── logs/
-│   ├── training.log
-│   ├── render.log
-│   └── metrics.log
-├── point_cloud/
-└── test/
+outputs/pgsr/
+├── synthetic/<scene>/
+│   ├── checkpoints/final.pth
+│   ├── checkpoints/final_point_cloud.ply
+│   ├── metrics/per_view_metrics.csv
+│   ├── metrics/summary_metrics.json
+│   ├── renders/val/000/
+│   │   ├── gt_rgb.png
+│   │   ├── pred_rgb.png
+│   │   ├── rgb_error.png
+│   │   ├── gt_depth.npy
+│   │   ├── pred_depth.npy
+│   │   ├── gt_depth_vis.png
+│   │   ├── pred_depth_vis.png
+│   │   ├── depth_error.png
+│   │   ├── gt_normal.npy
+│   │   ├── pred_normal.npy
+│   │   ├── gt_normal.png
+│   │   ├── pred_normal.png
+│   │   └── normal_error.png
+│   ├── config.json
+│   └── run.log
+└── real/<scene>/...
 ```
 
-Render and evaluate existing checkpoints without training:
+Every validation view is exported. Raw depth is in millimetres. Raw normals are
+signed world-space vectors. PGSR camera-space normals are rotated into world
+space before comparison; angular error normalizes per pixel and uses
+`acos(dot)`, never `abs(dot)`.
 
-```shell
-bash run_all_pgsr.sh \
-    --data-root /path/to/datasets \
-    --gpu 0 \
-    --eval-only
+`per_view_metrics.csv` uses this fixed schema:
+
+```text
+scene,view_id,rgb_psnr,rgb_ssim,rgb_lpips,sl_psnr,sl_ssim,depth_mae,depth_rmse,depth_median_ae,depth_p90_ae,depth_p95_ae,depth_acc_1mm,depth_acc_2mm,depth_acc_5mm,depth_abs_rel,depth_delta_1.25,depth_delta_1.25^2,depth_delta_1.25^3,normal_mean_angle,normal_median_angle,normal_p90_angle,normal_acc_10,normal_acc_20,normal_acc_22.5,normal_acc_30
 ```
 
-Use `--skip-existing` to continue with incomplete scenes, `--output-root PATH`
-to choose another result directory, or `--iterations N` for a short smoke test.
+`rgb_psnr` is peak signal-to-noise ratio in dB, `rgb_ssim` is structural
+similarity, and `rgb_lpips` is perceptual distance (lower is better). Depth
+`mae`, `rmse`, median AE, P90 AE, and P95 AE are millimetres. `depth_acc_*mm`
+is the fraction at or below that absolute-error threshold. `depth_abs_rel` is
+mean absolute error divided by GT depth. The three `depth_delta_*` fields are
+fractions whose max(pred/GT, GT/pred) is below 1.25, 1.25 squared, or 1.25
+cubed. Normal mean, median, and P90 are angular errors in degrees;
+`normal_acc_*` is the fraction at or below the named degree threshold. All
+accuracy fields are in `[0,1]`.
 
-Standard Blender/NeRF synthetic scenes preserve all frames and their original
-coordinate scale. Extended synthetic scenes with explicit `pattern_index`
-metadata select pattern 1 by default; millimetre-scale camera coordinates are converted
-to metres. The real-world adapter uses pattern 1 and native COLMAP coordinates
-without changing pixels.
-For synthetic scenes, `--pattern N` can select another pattern. For either
-dataset type, `--eval-split test` is available when that split exists.
+PGSR is RGB-only, so SL fields are `NaN`. Missing GT is also `NaN`.
+Depth validity intersects finite positive GT below 10,000 mm with alpha and an
+optional mask. Normal validity additionally erodes one boundary pixel and
+requires a finite nonzero GT normal. Scene visualizations share a percentile
+depth range, 0–10 mm error range, and 0–90 degree normal error range.
+
+`summary_metrics.json` is the arithmetic mean across views for each metric,
+independently ignoring `NaN`. Send Meng Wei the complete `outputs/pgsr/`
+directory after both runs.
 
 ## Updates
 - [2024.07.18]: We fine-tuned the hyperparameters based on the original paper. The Chamfer Distance on the DTU dataset decreased to 0.47.

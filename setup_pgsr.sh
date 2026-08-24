@@ -28,4 +28,6 @@ fi
 "$PYTHON" -c 'import torch, diff_plane_rasterization, simple_knn; print(f"PGSR ready: torch={torch.__version__}, CUDA={torch.version.cuda}, GPUs={torch.cuda.device_count()}")'
 
 echo "Setup complete. Run:"
-echo "  bash run_all_pgsr.sh --data-root /path/to/datasets --gpu 0"
+echo "  1. Change only DATA_ROOT in scripts/run_pgsr_synthetic.sh and scripts/run_pgsr_real.sh"
+echo "  2. bash scripts/run_pgsr_synthetic.sh"
+echo "  3. bash scripts/run_pgsr_real.sh"
