@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from statistics import median
 
@@ -68,6 +69,35 @@ def convert(
     return converted, has_pattern_metadata
 
 
+def evaluation_records(payload: dict, source: Path, pattern: int) -> list[dict]:
+    """Record unmodified evaluation targets for the standalone exporter."""
+    frames, _ = selected_frames(payload, pattern)
+    records = []
+    for frame in frames:
+        relative = Path(frame["file_path"])
+        image = (source / relative).with_suffix(".png").resolve()
+        match = re.search(r"r_(\d+)(?:_\d+)?$", relative.stem)
+        frame_id = int(match.group(1)) if match else None
+        split_name = relative.parts[0] if len(relative.parts) > 1 else "val"
+        target_stem = f"r_{frame_id}" if frame_id is not None else relative.stem
+
+        def optional_target(folder: str, suffix: str) -> str | None:
+            path = (source / split_name / folder / f"{target_stem}{suffix}").resolve()
+            return str(path) if path.is_file() else None
+
+        records.append(
+            {
+                "image_name": image.stem,
+                "source_image": str(image),
+                "frame_id": frame_id,
+                "gt_depth": optional_target("depth", ".exr"),
+                "gt_normal": optional_target("normal_world", ".exr"),
+                "mask": optional_target("mask", ".png"),
+            }
+        )
+    return records
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
@@ -96,8 +126,9 @@ def main() -> int:
         else infer_translation_scale(candidate_frames, structured_light)
     )
     train, _ = convert(train_payload, source, args.pattern, scale)
+    eval_payload = json.loads(eval_path.read_text(encoding="utf-8"))
     test, test_has_patterns = convert(
-        json.loads(eval_path.read_text(encoding="utf-8")),
+        eval_payload,
         source,
         args.pattern,
         scale,
@@ -116,7 +147,11 @@ def main() -> int:
         "structured_light_extensions": structured_light or test_has_patterns,
         "pattern_index": args.pattern if structured_light else None,
         "translation_scale": scale,
+        "pred_depth_to_mm": 1.0 / scale,
         "evaluation_source": str(eval_path),
+        "evaluation_records": evaluation_records(
+            eval_payload, source, args.pattern
+        ),
         "train_views": len(train["frames"]),
         "evaluation_views": len(test["frames"]),
     }

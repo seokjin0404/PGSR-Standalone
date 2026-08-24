@@ -106,12 +106,38 @@ def main() -> int:
         "evaluation_split": args.eval_split,
         "colmap_model": str(colmap_source),
         "scale_mm_per_colmap": scale,
+        "pred_depth_to_mm": scale,
         "coordinate_policy": "native COLMAP coordinates; PGSR camera/point geometry unchanged",
         "color_space": "linear_rgb",
         "color_policy": "linear RGB values preserved; no transfer-function conversion",
         "materialization": sorted(modes),
         "train_views": len(train_stems),
         "evaluation_views": len(eval_stems),
+        "evaluation_records": [
+            {
+                "image_name": f"r_{pose_id}_{args.pattern}",
+                "source_image": str(
+                    (source / args.eval_split / "rgb" / f"r_{pose_id}_{args.pattern}.png").resolve()
+                ),
+                "frame_id": pose_id,
+                "gt_depth": str(
+                    (source / args.eval_split / "depth" / f"r_{pose_id}.exr").resolve()
+                )
+                if (source / args.eval_split / "depth" / f"r_{pose_id}.exr").is_file()
+                else None,
+                "gt_normal": str(
+                    (source / args.eval_split / "normal_world" / f"r_{pose_id}.exr").resolve()
+                )
+                if (source / args.eval_split / "normal_world" / f"r_{pose_id}.exr").is_file()
+                else None,
+                "mask": str(
+                    (source / args.eval_split / "mask" / f"r_{pose_id}.png").resolve()
+                )
+                if (source / args.eval_split / "mask" / f"r_{pose_id}.png").is_file()
+                else None,
+            }
+            for pose_id in eval_ids
+        ],
     }
     (destination / "pgsr_input.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
